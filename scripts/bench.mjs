@@ -179,7 +179,10 @@ async function versionOf(bin, exe, cwd, timeoutSec) {
   // "bento version 0.2.3", "v24.18.0", "quickjs version 2025-04-26"
   const m = text.match(/version (\d{4}-\d{2}-\d{2})/) ||
     text.match(/version ([\d.]+(?:-[a-zA-Z0-9]+)?)/) ||
-    text.match(/v?([\d]+\.[\d.]+(?:-[a-zA-Z0-9]+)?)/);
+    text.match(/v?([\d]+\.[\d.]+(?:-[a-zA-Z0-9]+)?)/) ||
+    // An unreleased build reports something like "bento version dev", which is
+    // worth showing rather than leaving the column blank.
+    text.match(/version (\S+)/);
   return m ? m[1] : "";
 }
 

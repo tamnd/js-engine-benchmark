@@ -121,10 +121,13 @@ async function main() {
     ported.push({ ...b, src, bin });
   }
 
+  // The three engines that run TypeScript as it is: node strips the types, bun
+  // and deno compile them. deno wants the subcommand and would otherwise print a
+  // progress line into the score stream.
   const engines = [{ name: "bento-aot", exe: "", args: (p) => [] }];
-  for (const bin of ["node", "bun"]) {
+  for (const [bin, argv] of [["node", []], ["bun", []], ["deno", ["run", "--quiet"]]]) {
     const exe = findOnPath(bin);
-    if (exe) engines.push({ name: bin, exe, args: (p) => [p.src] });
+    if (exe) engines.push({ name: bin, exe, args: (p) => [...argv, p.src] });
     else console.error(`skip ${bin}: not on PATH`);
   }
 

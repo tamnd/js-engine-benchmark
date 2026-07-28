@@ -44,17 +44,21 @@ if (Have "bento") {
   Write-Host "already installed: $((Get-Command bento).Source)"
 } elseif (-not (Have "go")) {
   Write-Warning "go is not installed; skipping bento. Install Go, then re-run."
-} elseif ($env:BENTO_SRC) {
-  # Built from source, so a local bento checkout can be benchmarked by
-  # pointing BENTO_SRC at it.
-  Push-Location $env:BENTO_SRC
+} else {
+  # Built from a checkout, not go install: bento's go.mod carries a replace
+  # directive, which makes it uninstallable that way. Point BENTO_SRC at a
+  # local checkout to benchmark that instead of the published tip.
+  New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+  $src = $env:BENTO_SRC
+  if (-not $src) {
+    $src = Join-Path ([System.IO.Path]::GetTempPath()) "bento-src"
+    if (Test-Path $src) { Remove-Item -Recurse -Force $src }
+    git clone --depth 1 https://github.com/tamnd/bento $src
+  }
+  Push-Location $src
   $env:CGO_ENABLED = "0"
   go build -o (Join-Path $binDir "bento.exe") ./cmd/bento
   Pop-Location
-} else {
-  $env:CGO_ENABLED = "0"
-  $env:GOBIN = $binDir
-  go install github.com/tamnd/bento/cmd/bento@latest
 }
 
 Write-Host "==> v8 and quickjs"

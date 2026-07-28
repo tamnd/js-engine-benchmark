@@ -56,13 +56,16 @@ if have bento && [ -z "${BENTO_SRC:-}" ]; then
 elif ! have go; then
   echo "go is not installed; skipping bento. Install Go, then re-run." >&2
 else
-  # Built from source rather than fetched, so a local bento checkout can be
-  # benchmarked by pointing BENTO_SRC at it.
-  if [ -n "${BENTO_SRC:-}" ]; then
-    (cd "$BENTO_SRC" && CGO_ENABLED=0 go build -o "$GOBIN/bento" ./cmd/bento)
-  else
-    CGO_ENABLED=0 GOBIN="$GOBIN" go install github.com/tamnd/bento/cmd/bento@latest
+  # Built from a checkout, not go install: bento's go.mod carries a replace
+  # directive, which makes it uninstallable that way. Point BENTO_SRC at a
+  # local checkout to benchmark that instead of the published tip.
+  mkdir -p "$GOBIN"
+  src="${BENTO_SRC:-}"
+  if [ -z "$src" ]; then
+    src="$(mktemp -d)/bento"
+    git clone --depth 1 https://github.com/tamnd/bento "$src"
   fi
+  (cd "$src" && CGO_ENABLED=0 go build -o "$GOBIN/bento" ./cmd/bento)
 fi
 
 echo "==> v8 and quickjs"

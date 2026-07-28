@@ -51,9 +51,14 @@ jobs:
         with:
           go-version: stable
       - name: install bento
+        # Not go install: bento's go.mod carries a replace directive, which
+        # makes it uninstallable that way, so build it from a checkout. The
+        # trailing slash on -o lets go pick the name, and the .exe on Windows.
         run: |
-          go install github.com/tamnd/bento/cmd/bento@latest
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          git clone --depth 1 https://github.com/tamnd/bento "$RUNNER_TEMP/bento"
+          mkdir -p "$HOME/bin"
+          cd "$RUNNER_TEMP/bento" && CGO_ENABLED=0 go build -o "$HOME/bin/" ./cmd/bento
+          echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: run
         run: |
           bun run --silent build

@@ -7,12 +7,13 @@
 // graph, so the node counts and the payload depth are the load and are kept
 // exactly as the original has them.
 //
-// One shape changed in the port. The original payload is two different object
-// literals, { array, string } at a leaf and { left, right } above it, which is
-// an untyped heterogeneous tree. Here it is one Payload class carrying all four
-// fields, with the unused ones null. The node count, the tree depth, and the
-// ten-element array per leaf are the same, so the allocation the benchmark is
-// there to measure is the same; each node is a little wider.
+// The original payload is two different object literals, { array, string } at a
+// leaf and { left, right } above it. An earlier version of this port merged them
+// into one class with all four fields and the unused ones null, which describes
+// the tree correctly but not its cost: it gave every branch an array slot and a
+// string slot it never uses, and this benchmark is a measurement of how much the
+// collector has to trace. The two shapes are a class and a subclass here, so a
+// branch is the two fields the original's branch is.
 
 import { random } from "./harness";
 
@@ -24,24 +25,35 @@ const kSplayTreePayloadDepth = 5;
 // array and the string; an internal node carries the two children. Nothing ever
 // reads it back, which is the point: it exists to make each insert allocate.
 class Payload {
-  array: number[] | null;
-  text: string | null;
   left: Payload | null;
   right: Payload | null;
 
-  constructor(array: number[] | null, text: string | null, left: Payload | null, right: Payload | null) {
-    this.array = array;
-    this.text = text;
+  constructor(left: Payload | null, right: Payload | null) {
     this.left = left;
     this.right = right;
   }
 }
 
+// PayloadLeaf is the bottom of the payload tree, the shape that carries the ten
+// element array and the text. It is a subclass rather than a second unrelated
+// class so generatePayloadTree still has one return type, which is the closest
+// typed TypeScript gets to the original's two object literals.
+class PayloadLeaf extends Payload {
+  array: number[];
+  text: string;
+
+  constructor(array: number[], text: string) {
+    super(null, null);
+    this.array = array;
+    this.text = text;
+  }
+}
+
 function generatePayloadTree(depth: number, tag: string): Payload {
   if (depth == 0) {
-    return new Payload([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "String for key " + tag + " in leaf node", null, null);
+    return new PayloadLeaf([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "String for key " + tag + " in leaf node");
   }
-  return new Payload(null, null, generatePayloadTree(depth - 1, tag), generatePayloadTree(depth - 1, tag));
+  return new Payload(generatePayloadTree(depth - 1, tag), generatePayloadTree(depth - 1, tag));
 }
 
 // A splay-tree node. key orders the tree, value is the payload, and the two

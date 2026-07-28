@@ -8,11 +8,9 @@
 // measures in Go is Go's collector rather than a JavaScript engine's, which is
 // the interesting half of the comparison.
 //
-// One shape changed, the same one the TypeScript port changed. The original
-// payload is two different object literals, {array, string} at a leaf and
-// {left, right} above it. Here it is one struct with all four fields and the
-// unused ones left zero, so each payload node is a little wider and there are
-// exactly as many of them.
+// The payload's two object literals stay two shapes here, for the reason spelled
+// out on Payload below: in a benchmark about tracing, how wide a node is is part
+// of the workload.
 package main
 
 import (
@@ -27,21 +25,39 @@ const (
 	splayTreePayloadDepth  = 5
 )
 
-// Payload is the junk tree hung off every splay-tree node. A leaf carries the
-// slice and the text; an internal node carries the two children. Nothing ever
-// reads it back, which is the point: it exists to make each insert allocate.
+// Payload is the junk tree hung off every splay-tree node. Nothing ever reads it
+// back, which is the point: it exists to make each insert allocate.
+//
+// The original is two different object literals, {left, right} at a branch and
+// {array, string} at a leaf. Keeping them as two shapes is what this type and
+// PayloadLeaf are for. An earlier version of this port merged them into one
+// struct with all four fields, which is a fair description of the tree but not
+// of its cost: it gave every branch a slice header and a string header it never
+// uses, so each of the 31 branches in a payload was four pointers wide instead
+// of two, and this benchmark is a measurement of how much the collector has to
+// trace. A branch is now the two pointers the original's branch is.
 type Payload struct {
-	array       []int
-	text        string
 	left, right *Payload
+}
+
+// PayloadLeaf is the bottom of the payload tree, the shape that carries the ten
+// element slice and the text. Payload is embedded first so a leaf's address is
+// also the address of a Payload and generatePayloadTree can return either, which
+// is the closest Go gets to the original's two-literal union. The embedded
+// branch pointers stay nil, exactly as a leaf's do.
+type PayloadLeaf struct {
+	Payload
+	array []int
+	text  string
 }
 
 func generatePayloadTree(depth int, tag string) *Payload {
 	if depth == 0 {
-		return &Payload{
+		leaf := &PayloadLeaf{
 			array: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 			text:  "String for key " + tag + " in leaf node",
 		}
+		return &leaf.Payload
 	}
 	return &Payload{
 		left:  generatePayloadTree(depth-1, tag),

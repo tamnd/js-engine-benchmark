@@ -136,30 +136,42 @@ async function main() {
     (data[kind] ||= {})[name] = value;
   };
 
-  for (const engine of engines) {
-    const scores = {};
-    for (const p of ported) {
+  // One benchmark at a time, all engines back to back on it, so a machine whose
+  // load drifts over the half hour moves every engine's score together rather
+  // than handing whichever one ran during the quiet stretch a free win. Each
+  // benchmark prints its own comparison line as soon as its engines are done.
+  for (const p of ported) {
+    const row = {};
+    for (const engine of engines) {
       const exe = engine.exe || p.bin;
       let best = 0;
       for (let i = 0; i < opts.repeat; i++) {
-        process.stderr.write(`run ${engine.name} ${p.name} (${i + 1}/${opts.repeat}) ... `);
+        process.stderr.write(`run ${p.name} ${engine.name} (${i + 1}/${opts.repeat}) ... `);
         const { stdout, stderr } = await run(exe, engine.args(p), dist, opts.timeout);
         const score = parseScore(p.name, stdout, stderr);
         console.error(score || `no score\n${(stdout + stderr).trim()}`);
         if (score > best) best = score;
       }
-      if (best) scores[p.name] = best | 0;
-    }
-    for (const [k, v] of Object.entries(scores)) put(k, engine.name, v);
-    const values = Object.values(scores);
-    if (values.length) put("Score", engine.name, geometricMean(values) | 0);
-    if (engine.exe || existsSync(join(dist, `${ported[0]?.file}.bin`))) {
-      const exe = engine.exe || join(dist, `${ported[0].file}.bin`);
-      try {
-        put("Exe size", engine.name, statSync(exe).size);
-      } catch {
-        // A binary we cannot stat is one we cannot bill for.
+      if (best) {
+        row[engine.name] = best | 0;
+        put(p.name, engine.name, best | 0);
       }
+    }
+    const base = row["bento-aot"];
+    const parts = Object.entries(row).map(([name, v]) =>
+      name === "bento-aot" ? `${name} ${v}` : `${name} ${v} (bento ${(base / v).toFixed(2)}x)`
+    );
+    console.error(`${p.name}: ${parts.join(", ")}`);
+  }
+
+  for (const engine of engines) {
+    const values = ported.map((p) => data[p.name]?.[engine.name]).filter(Boolean);
+    if (values.length === ported.length) put("Score", engine.name, geometricMean(values) | 0);
+    const exe = engine.exe || ported[0]?.bin;
+    try {
+      if (exe) put("Exe size", engine.name, statSync(exe).size);
+    } catch {
+      // A binary we cannot stat is one we cannot bill for.
     }
   }
 

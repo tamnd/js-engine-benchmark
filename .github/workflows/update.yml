@@ -47,6 +47,18 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: canary
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: install bento
+        # Not go install: bento's go.mod carries a replace directive, which
+        # makes it uninstallable that way, so build it from a checkout. The
+        # trailing slash on -o lets go pick the name, and the .exe on Windows.
+        run: |
+          git clone --depth 1 https://github.com/tamnd/bento "$RUNNER_TEMP/bento"
+          mkdir -p "$HOME/bin"
+          cd "$RUNNER_TEMP/bento" && CGO_ENABLED=0 go build -o "$HOME/bin/" ./cmd/bento
+          echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: run
         run: |
           bun run --silent build
@@ -110,8 +122,8 @@ jobs:
       - name: commit
         if: github.ref == 'refs/heads/main'
         run: |
-          git config --global user.email "504595380@qq.com"
-          git config --global user.name "ahaoboy-ci"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -am"update-by-ci"
           cat README.md
@@ -138,7 +150,6 @@ jobs:
           publish_dir: ./web/dist
           publish_branch: doc
           force_orphan: true
-          cname: github.com
 
       - name: release
         uses: ncipollo/release-action@v1

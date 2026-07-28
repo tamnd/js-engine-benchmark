@@ -2,3 +2,7 @@ dist
 node_modules
 pnpm-lock.yaml
 /bun.lock
+scripts/env.sh
+scripts/env.ps1
+ts-dist
+go-dist

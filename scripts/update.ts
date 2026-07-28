@@ -150,6 +150,11 @@ async function getVersion(cmd: string) {
     const text = await execCmd(`${cmd} --version`);
     return text.match(/([\d.]+(?:-[a-zA-Z0-9]+)?)/)?.[1].trim();
   }
+  if (cmd === "bento") {
+    // bento version 0.2.3, or "bento version dev" for an unreleased build
+    const text = await execCmd(`${cmd} --version`);
+    return text.match(/version ([\d.]+(?:-[a-zA-Z0-9]+)?)/)?.[1].trim() || "";
+  }
   if (cmd === "graaljs") {
     const text = await execCmd(`${cmd} --version`);
     return text.match(/([\d.]+(?:-[a-zA-Z0-9]+)?)/)?.[1].trim();

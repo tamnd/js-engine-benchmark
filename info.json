@@ -284,6 +284,14 @@
     "lang": "go"
   },
   {
+    "name": "bento",
+    "subcmd": "run",
+    "description": "A TypeScript runtime built in Go, a Bun alternative. Pure Go with zero cgo, so it ships as one static binary that cross-compiles everywhere",
+    "url": "https://github.com/tamnd/bento",
+    "install": "https://github.com/tamnd/bento",
+    "lang": "go"
+  },
+  {
     "name": "lumen",
     "description": "A from-scratch JavaScript engine in Rust — std only, zero deps, 100% test262 (53,376/53,376)",
     "url": "https://github.com/lucid-softworks/lumen",

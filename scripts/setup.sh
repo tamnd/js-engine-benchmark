@@ -51,7 +51,9 @@ echo "==> bun"
 have bun || curl -fsSL https://bun.sh/install | bash
 
 echo "==> bento"
-if ! have go; then
+if have bento && [ -z "${BENTO_SRC:-}" ]; then
+  echo "already installed: $(command -v bento)"
+elif ! have go; then
   echo "go is not installed; skipping bento. Install Go, then re-run." >&2
 else
   # Built from source rather than fetched, so a local bento checkout can be

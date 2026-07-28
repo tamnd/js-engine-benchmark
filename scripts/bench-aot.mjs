@@ -14,6 +14,10 @@
 // itself as of v23 and bun has always run TypeScript directly, so all three
 // engines see one source. Scores are the V8 benchmark suite's own, higher is
 // faster, and the overall Score is their geometric mean the way base.js takes it.
+//
+// The last column is go/, the same benchmarks hand-written in Go. bento compiles
+// TypeScript to Go, so that column is the ceiling its output is aiming at: what
+// the algorithm costs when a person writes the Go rather than a compiler.
 
 import { execFile, execFileSync } from "child_process";
 import { existsSync, readFileSync, statSync, writeFileSync } from "fs";
@@ -25,6 +29,9 @@ import { BENCHES } from "./build-ts.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "ts-dist");
+const goSrc = join(root, "go");
+const goDist = join(root, "go-dist");
+const exeExt = process.platform === "win32" ? ".exe" : ".bin";
 
 function parseArgs(argv) {
   const opts = { repeat: 1, out: "", timeout: 1800, bentoRoot: process.env.BENTO_MODULE_ROOT || "" };
@@ -117,7 +124,7 @@ async function main() {
   for (const b of BENCHES) {
     const src = join(dist, `${b.file}.ts`);
     if (!existsSync(src)) continue;
-    const bin = join(dist, `${b.file}${process.platform === "win32" ? ".exe" : ".bin"}`);
+    const bin = join(dist, `${b.file}${exeExt}`);
     process.stderr.write(`build ${b.name} ... `);
     const { err, stdout, stderr } = await run(bento, ["build", src, "-o", bin], dist, opts.timeout, bentoEnv);
     if (err || !existsSync(bin)) {
@@ -128,14 +135,37 @@ async function main() {
     ported.push({ ...b, src, bin });
   }
 
+  // The hand-written Go ports, one package per benchmark under go/, named after
+  // the source file without its dash. A benchmark with no Go port, or one that
+  // fails to build, simply has no Go column.
+  const goExe = findOnPath("go");
+  if (!goExe) console.error("skip go: not on PATH");
+  for (const p of goExe ? ported : []) {
+    const pkg = p.file.replace(/-/g, "");
+    if (!existsSync(join(goSrc, pkg))) continue;
+    const bin = join(goDist, `${pkg}${exeExt}`);
+    process.stderr.write(`build ${p.name} (go) ... `);
+    const { err, stdout, stderr } = await run(goExe, ["build", "-o", bin, `./${pkg}`], goSrc, opts.timeout);
+    if (err || !existsSync(bin)) {
+      console.error(`FAILED\n${(stdout + stderr).trim()}`);
+      continue;
+    }
+    console.error("ok");
+    p.goBin = bin;
+  }
+
   // The three engines that run TypeScript as it is: node strips the types, bun
   // and deno compile them. deno wants the subcommand and would otherwise print a
-  // progress line into the score stream.
-  const engines = [{ name: "bento-aot", exe: "", args: (p) => [] }];
+  // progress line into the score stream. bento-aot and go are already binaries,
+  // one per benchmark, so they take no arguments.
+  const engines = [{ name: "bento-aot", exeFor: (p) => p.bin, args: () => [] }];
   for (const [bin, argv] of [["node", []], ["bun", []], ["deno", ["run", "--quiet"]]]) {
     const exe = findOnPath(bin);
-    if (exe) engines.push({ name: bin, exe, args: (p) => [...argv, p.src] });
+    if (exe) engines.push({ name: bin, exeFor: () => exe, args: (p) => [...argv, p.src] });
     else console.error(`skip ${bin}: not on PATH`);
+  }
+  if (ported.some((p) => p.goBin)) {
+    engines.push({ name: "go", exeFor: (p) => p.goBin, args: () => [] });
   }
 
   const data = {};
@@ -150,7 +180,8 @@ async function main() {
   for (const p of ported) {
     const row = {};
     for (const engine of engines) {
-      const exe = engine.exe || p.bin;
+      const exe = engine.exeFor(p);
+      if (!exe) continue;
       let best = 0;
       for (let i = 0; i < opts.repeat; i++) {
         process.stderr.write(`run ${p.name} ${engine.name} (${i + 1}/${opts.repeat}) ... `);
@@ -174,7 +205,7 @@ async function main() {
   for (const engine of engines) {
     const values = ported.map((p) => data[p.name]?.[engine.name]).filter(Boolean);
     if (values.length === ported.length) put("Score", engine.name, geometricMean(values) | 0);
-    const exe = engine.exe || ported[0]?.bin;
+    const exe = ported.length ? engine.exeFor(ported[0]) : "";
     try {
       if (exe) put("Exe size", engine.name, statSync(exe).size);
     } catch {

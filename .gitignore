@@ -5,3 +5,4 @@ pnpm-lock.yaml
 scripts/env.sh
 scripts/env.ps1
 ts-dist
+go-dist

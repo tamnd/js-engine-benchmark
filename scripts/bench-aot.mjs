@@ -1,6 +1,7 @@
 // Benchmark bento's AOT path against the engines that can run the same source.
 //
 //   node scripts/bench-aot.mjs --bento-root ~/github/tamnd/bento
+//   node scripts/bench-aot.mjs --fast                     # one pass, rough read
 //   node scripts/bench-aot.mjs --repeat 3 --out aot-linux.json
 //
 // bento's AOT compiler takes typed TypeScript, not the ES5 the V8 suite is
@@ -42,6 +43,12 @@ function parseArgs(argv) {
         break;
       case "--bento-root":
         opts.bentoRoot = value;
+        break;
+      // One pass per engine instead of three, for a rough read in a quarter of
+      // the time. It takes the flag's own slot because it has no value.
+      case "--fast":
+        opts.repeat = 1;
+        i--;
         break;
       default:
         throw new Error(`unknown flag: ${flag}`);

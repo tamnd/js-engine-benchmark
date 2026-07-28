@@ -58,7 +58,7 @@ for (const file of files) {
   const base = data.Score[baseline];
 
   const label = host.cpu
-    ? `${host.platform}, ${host.cpu}, ${host.cores} cores`
+    ? `${basename(file, ".json")}: ${host.platform}, ${host.cpu}, ${host.cores} cores`
     : basename(file, ".json");
   console.log(`### ${label}\n`);
 

@@ -1,0 +1,113 @@
+{
+  "Version": {
+    "bun": "1.3.14",
+    "node": "24.11.0",
+    "quickjs": "2026-06-04",
+    "v8": "15.2.0",
+    "bento": ""
+  },
+  "Total size": {
+    "bun": 92752752,
+    "node": 129491488,
+    "quickjs": 1071472,
+    "v8": 68222760,
+    "bento": 38871202
+  },
+  "Exe size": {
+    "bun": 92752752,
+    "node": 129491488,
+    "quickjs": 1071472,
+    "v8": 1205744,
+    "bento": 38871202
+  },
+  "Dll size": {
+    "bun": 0,
+    "node": 0,
+    "quickjs": 0,
+    "v8": 67017016,
+    "bento": 0
+  },
+  "Richards": {
+    "bun": 25573,
+    "node": 19568,
+    "quickjs": 693,
+    "v8": 27310,
+    "bento": 124
+  },
+  "DeltaBlue": {
+    "bun": 25079,
+    "node": 40200,
+    "quickjs": 625,
+    "v8": 56458,
+    "bento": 132
+  },
+  "Crypto": {
+    "bun": 25571,
+    "node": 17714,
+    "quickjs": 700,
+    "v8": 20880,
+    "bento": 75
+  },
+  "RayTrace": {
+    "bun": 54611,
+    "node": 23582,
+    "quickjs": 952,
+    "v8": 39441,
+    "bento": 170
+  },
+  "EarleyBoyer": {
+    "bun": 22437,
+    "node": 34166,
+    "quickjs": 920,
+    "v8": 33458,
+    "bento": 196
+  },
+  "RegExp": {
+    "bun": 4483,
+    "node": 5699,
+    "quickjs": 236,
+    "v8": 5543,
+    "bento": 62
+  },
+  "Splay": {
+    "bun": 5528,
+    "node": 11938,
+    "quickjs": 1311,
+    "v8": 8209,
+    "bento": 527
+  },
+  "NavierStokes": {
+    "bun": 29443,
+    "node": 32349,
+    "quickjs": 1242,
+    "v8": 25326,
+    "bento": 141
+  },
+  "Score": {
+    "bun": 18654,
+    "node": 19912,
+    "quickjs": 752,
+    "v8": 21688,
+    "bento": 145
+  },
+  "Score/MB": {
+    "bun": 210,
+    "node": 161,
+    "quickjs": 735,
+    "v8": 333,
+    "bento": 3
+  },
+  "Time(s)": {
+    "bun": 20,
+    "node": 21,
+    "quickjs": 52,
+    "v8": 20,
+    "bento": 213
+  },
+  "Host": {
+    "platform": "linux-x64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 4,
+    "hostname": "doge-01"
+  }
+}

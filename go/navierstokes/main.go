@@ -148,23 +148,34 @@ func (f *FluidField) linSolve(b int, x, x0 []float64, a, c float64) {
 	invC := 1 / c
 	for k := 0; k < f.iterations; k++ {
 		for j := 1; j <= height; j++ {
-			lastRow := (j - 1) * rowSize
-			currentRow := j * rowSize
-			nextRow := (j + 1) * rowSize
-			lastX := x[currentRow]
-			currentRow++
-			for i := 1; i <= width; i++ {
-				// The original is one expression, `lastX = x[currentRow] =
-				// (x0[currentRow] + a*(lastX+x[++currentRow]+x[++lastRow]+
-				// x[++nextRow])) * invC`. The store target and the x0 read take
-				// currentRow before any increment, which is target here, and the
-				// three reads inside the sum take the incremented indices.
-				target := currentRow
-				currentRow = target + 1
-				lastRow++
-				nextRow++
-				lastX = (x0[target] + a*(lastX+x[currentRow]+x[lastRow]+x[nextRow])) * invC
-				x[target] = lastX
+			// The original is one expression, `lastX = x[currentRow] =
+			// (x0[currentRow] + a*(lastX+x[++currentRow]+x[++lastRow]+
+			// x[++nextRow])) * invC`, walked by three running offsets. At cell i
+			// of row j those offsets are j*rowSize+i for the store and the x0
+			// read, one past it for the first neighbour, and the same column in
+			// the rows either side.
+			//
+			// Each of those is a window into the grid, so name them. All five are
+			// cut to exactly the width cells the loop touches, which is what lets
+			// the compiler drop the bounds checks: `range dst` bounds i by
+			// len(dst), and the other four were sliced to that same length, so it
+			// can see every index is in range without a test. Cutting them one
+			// longer and indexing i+1, which is the more obvious transcription,
+			// leaves the check in.
+			//
+			// dst and right share x's backing array, so the store through dst is
+			// the value right reads on the next pass, exactly as the offsets did.
+			base := j * rowSize
+			first, above, below := base+1, base+1-rowSize, base+1+rowSize
+			dst := x[first : first+width]
+			right := x[first+1 : first+1+width]
+			up := x[above : above+width]
+			down := x[below : below+width]
+			src := x0[first : first+width]
+			lastX := x[base]
+			for i := range dst {
+				lastX = (src[i] + a*(lastX+right[i]+up[i]+down[i])) * invC
+				dst[i] = lastX
 			}
 		}
 		f.setBnd(b, x)
@@ -197,25 +208,31 @@ func (f *FluidField) linSolve2(x, x0, y, y0 []float64, a, c float64) {
 	invC := 1 / c
 	for k := 0; k < f.iterations; k++ {
 		for j := 1; j <= height; j++ {
-			lastRow := (j - 1) * rowSize
-			currentRow := j * rowSize
-			nextRow := (j + 1) * rowSize
-			lastX := x[currentRow]
-			lastY := y[currentRow]
-			currentRow++
-			for i := 1; i <= width; i++ {
-				// The x line of the original carries no increments at all, so
-				// every index in it is the current one.
-				lastX = (x0[currentRow] + a*(lastX+x[currentRow]+x[lastRow]+x[nextRow])) * invC
-				x[currentRow] = lastX
-				// The y line does carry them, and as in linSolve the store
-				// target and the y0 read come before the three increments.
-				target := currentRow
-				currentRow = target + 1
-				lastRow++
-				nextRow++
-				lastY = (y0[target] + a*(lastY+y[currentRow]+y[lastRow]+y[nextRow])) * invC
-				y[target] = lastY
+			// Windowed the same way linSolve is, and cut to the same exact
+			// width so the indexes need no bounds check. The two halves of the
+			// original's body do not agree on where the offsets point: the x
+			// line carries no increments, so it reads its own cell and the rows
+			// either side one column behind; the y line increments first and so
+			// reads one column ahead and the rows either side level. That
+			// asymmetry is the original's and the windows keep it.
+			base := j * rowSize
+			first, above, below := base+1, base+1-rowSize, base+1+rowSize
+			xdst := x[first : first+width]
+			xup := x[above-1 : above-1+width]
+			xdown := x[below-1 : below-1+width]
+			xsrc := x0[first : first+width]
+			ydst := y[first : first+width]
+			yright := y[first+1 : first+1+width]
+			yup := y[above : above+width]
+			ydown := y[below : below+width]
+			ysrc := y0[first : first+width]
+			lastX := x[base]
+			lastY := y[base]
+			for i := range xdst {
+				lastX = (xsrc[i] + a*(lastX+xdst[i]+xup[i]+xdown[i])) * invC
+				xdst[i] = lastX
+				lastY = (ysrc[i] + a*(lastY+yright[i]+yup[i]+ydown[i])) * invC
+				ydst[i] = lastY
 			}
 		}
 		f.setBnd(1, x)
@@ -277,22 +294,21 @@ func (f *FluidField) project(u, v, p, div []float64) {
 	width, height, rowSize := f.width, f.height, f.rowSize
 	h := -0.5 / math.Sqrt(float64(width*height))
 	for j := 1; j <= height; j++ {
-		row := j * rowSize
-		previousRow := (j - 1) * rowSize
-		prevValue := row - 1
-		currentRow := row
-		nextValue := row + 1
-		nextRow := (j + 1) * rowSize
-		for i := 1; i <= width; i++ {
-			// Every index in the original's line is pre-incremented, the store
-			// target included, so all five advance before anything is read.
-			currentRow++
-			nextValue++
-			prevValue++
-			nextRow++
-			previousRow++
-			div[currentRow] = h * (u[nextValue] - u[prevValue] + v[nextRow] - v[previousRow])
-			p[currentRow] = 0
+		// Every index in the original's line is pre-incremented, the store
+		// target included, so all five advance before anything is read and all
+		// five land on column i. Six windows, one per offset, each cut to the
+		// width cells the loop touches so the indexes carry no bounds check.
+		base := j * rowSize
+		first, above, below := base+1, base+1-rowSize, base+1+rowSize
+		divRow := div[first : first+width]
+		pRow := p[first : first+width]
+		uRight := u[first+1 : first+1+width]
+		uLeft := u[first-1 : first-1+width]
+		vDown := v[below : below+width]
+		vUp := v[above : above+width]
+		for i := range divRow {
+			divRow[i] = h * (uRight[i] - uLeft[i] + vDown[i] - vUp[i])
+			pRow[i] = 0
 		}
 	}
 	f.setBnd(0, div)
@@ -302,22 +318,20 @@ func (f *FluidField) project(u, v, p, div []float64) {
 	wScale := 0.5 * float64(width)
 	hScale := 0.5 * float64(height)
 	for j := 1; j <= height; j++ {
-		prevPos := j*rowSize - 1
-		currentPos := j * rowSize
-		nextPos := j*rowSize + 1
-		prevRow := (j - 1) * rowSize
-		nextRow := (j + 1) * rowSize
-
-		for i := 1; i <= width; i++ {
-			// u's line advances currentPos, nextPos and prevPos; v's line reuses
-			// the currentPos u just advanced and advances only its own two rows.
-			currentPos++
-			nextPos++
-			prevPos++
-			u[currentPos] -= wScale * (p[nextPos] - p[prevPos])
-			nextRow++
-			prevRow++
-			v[currentPos] -= hScale * (p[nextRow] - p[prevRow])
+		// u's line advances currentPos, nextPos and prevPos; v's line reuses
+		// the currentPos u just advanced and advances only its own two rows. All
+		// six land on column i, so the same six windows serve both lines.
+		base := j * rowSize
+		first, above, below := base+1, base+1-rowSize, base+1+rowSize
+		uRow := u[first : first+width]
+		vRow := v[first : first+width]
+		pRight := p[first+1 : first+1+width]
+		pLeft := p[first-1 : first-1+width]
+		pDown := p[below : below+width]
+		pUp := p[above : above+width]
+		for i := range uRow {
+			uRow[i] -= wScale * (pRight[i] - pLeft[i])
+			vRow[i] -= hScale * (pDown[i] - pUp[i])
 		}
 	}
 	f.setBnd(1, u)

@@ -94,10 +94,31 @@ type Variable struct {
 	walkStrength Strength
 	stay         bool
 	name         string
+	// room is the constraint list's first cells, held in the variable itself.
+	// Almost every variable in either test ends up with exactly two constraints,
+	// and appending to a nil slice would reach the heap twice to get there, once
+	// for one cell and again for two. The two exceptions are the projection
+	// test's scale and offset, which collect one per destination and spill to
+	// the heap the ordinary way. Nothing else changes: the list is still a
+	// slice, still grows by append, and still holds the same constraints.
+	room [2]Constraint
 }
 
 func newVariable(name string, initialValue float64) *Variable {
-	return &Variable{value: initialValue, walkStrength: weakest, stay: true, name: name}
+	v := &Variable{value: initialValue, walkStrength: weakest, stay: true, name: name}
+	v.constraints = v.room[:0]
+	return v
+}
+
+// varName builds a name like "v17" or "src3", which is what the original's
+// "v" + i does. The obvious transcription, prefix + strconv.Itoa(i), reaches the
+// heap twice: once for the digits and again for the joined string. The original
+// produces one string, so this produces one string, formatting the digits into a
+// buffer that stays on the stack and converting that once. Same name, same
+// number of them, one allocation each rather than two.
+func varName(prefix string, i int) string {
+	var buf [24]byte
+	return string(strconv.AppendInt(append(buf[:0], prefix...), int64(i), 10))
 }
 
 func (v *Variable) addConstraint(c Constraint) {
@@ -546,7 +567,7 @@ func chainTest(n int) {
 	// The names are only ever stored, but building them is work the JavaScript
 	// does on every iteration, so this does it too.
 	for i := 0; i <= n; i++ {
-		v := newVariable("v"+strconv.Itoa(i), 0)
+		v := newVariable(varName("v", i), 0)
 		if prev != nil {
 			addConstraint(newEqualityConstraint(prev, v, required))
 		}
@@ -582,8 +603,8 @@ func projectionTest(n int) {
 
 	dests := make([]*Variable, 0, n)
 	for i := 0; i < n; i++ {
-		src = newVariable("src"+strconv.Itoa(i), float64(i))
-		dst = newVariable("dst"+strconv.Itoa(i), float64(i))
+		src = newVariable(varName("src", i), float64(i))
+		dst = newVariable(varName("dst", i), float64(i))
 		dests = append(dests, dst)
 		addConstraint(newStayConstraint(src, normal))
 		addConstraint(newScaleConstraint(src, scale, offset, dst, required))

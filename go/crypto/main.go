@@ -143,23 +143,33 @@ func (x *BigInteger) grow(n int) {
 	}
 }
 
-// am is am3, the engine setupEngine installs: 28 bit digits split into 14 bit
-// halves so every intermediate stays inside a double's integer range. It
-// computes w[j..j+n-1] += x * this[i..i+n-1] + c and returns the carry out.
+// am computes w[j..j+n-1] += mult * this[i..i+n-1] + c and returns the carry
+// out. This is the one place the port does not follow the original instruction
+// for instruction, and the reason is the whole point of having a Go column.
+//
+// The original is am3, which splits each 28 bit digit into 14 bit halves and
+// reassembles the product from three partial products. That split is not part
+// of the algorithm. It is there because JavaScript has no integers: a product of
+// two 28 bit digits needs 56 bits, a double holds 53, so jsbn computes it in
+// halves that fit. Go has a 64 bit integer, so the same digit multiply is one
+// instruction, and writing the halves out would be emulating a limitation the
+// language does not have.
+//
+// Everything else is unchanged: the same 28 bit digits, the same digit count,
+// the same number of digit multiplications, the same results. The arithmetic is
+// on int64 rather than int so the widest intermediate, a 56 bit product plus two
+// 28 bit addends, is stated to fit whatever int happens to be.
 func (x *BigInteger) am(i, mult int, w *BigInteger, j, c, n int) int {
-	xl := mult & 0x3fff
-	xh := mult >> 14
+	m := int64(mult)
+	carry := int64(c)
 	for ; n > 0; n-- {
-		l := x.d[i] & 0x3fff
-		h := x.d[i] >> 14
+		v := m*int64(x.d[i]) + int64(w.d[j]) + carry
 		i++
-		m := xh*l + h*xl
-		l = xl*l + ((m & 0x3fff) << 14) + w.d[j] + c
-		c = (l >> 28) + (m >> 14) + xh*h
-		w.d[j] = l & 0xfffffff
+		w.d[j] = int(v & dm)
 		j++
+		carry = v >> dbits
 	}
-	return c
+	return int(carry)
 }
 
 // copyTo copies x to r.
